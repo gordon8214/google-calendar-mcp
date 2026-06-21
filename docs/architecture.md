@@ -27,6 +27,7 @@ The server provides calendar management tools that LLMs can use for calendar ope
 ### Available Tools
 
 - `list-calendars` - List all available calendars
+- `update-calendar` - Update a calendar's settings (time zone, name, description, location, color, visibility)
 - `list-events` - List events with date filtering
 - `search-events` - Search events by text query
 - `get-event` - Get details of a specific event by ID

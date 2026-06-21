@@ -2,7 +2,7 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from "googleapis";
-import { ListCalendarsResponse } from "../../types/structured-responses.js";
+import { ListCalendarsResponse, convertCalendarToStructured } from "../../types/structured-responses.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 
 export class ListCalendarsHandler extends BaseToolHandler {
@@ -32,7 +32,7 @@ export class ListCalendarsHandler extends BaseToolHandler {
                     )!;
 
                     return {
-                        ...this.convertCalendarToStructured(preferredCal, unified.calendarId),
+                        ...convertCalendarToStructured(preferredCal, unified.calendarId),
                         accountAccess: unified.accounts.map(a => ({
                             accountId: a.accountId,
                             accessRole: a.accessRole,
@@ -49,43 +49,11 @@ export class ListCalendarsHandler extends BaseToolHandler {
 
         // Single account - no deduplication needed
         const response: ListCalendarsResponse = {
-            calendars: allCalendars.map(cal => this.convertCalendarToStructured(cal)),
+            calendars: allCalendars.map(cal => convertCalendarToStructured(cal)),
             totalCount: allCalendars.length
         };
 
         return createStructuredResponse(response);
-    }
-
-    private convertCalendarToStructured(cal: calendar_v3.Schema$CalendarListEntry, idOverride?: string) {
-        return {
-            id: idOverride || cal.id || '',
-            summary: cal.summary ?? undefined,
-            description: cal.description ?? undefined,
-            location: cal.location ?? undefined,
-            timeZone: cal.timeZone ?? undefined,
-            summaryOverride: cal.summaryOverride ?? undefined,
-            colorId: cal.colorId ?? undefined,
-            backgroundColor: cal.backgroundColor ?? undefined,
-            foregroundColor: cal.foregroundColor ?? undefined,
-            hidden: cal.hidden ?? undefined,
-            selected: cal.selected ?? undefined,
-            accessRole: cal.accessRole ?? undefined,
-            defaultReminders: cal.defaultReminders?.map(r => ({
-                method: (r.method as 'email' | 'popup') || 'popup',
-                minutes: r.minutes || 0
-            })),
-            notificationSettings: cal.notificationSettings ? {
-                notifications: cal.notificationSettings.notifications?.map(n => ({
-                    type: n.type ?? undefined,
-                    method: n.method ?? undefined
-                }))
-            } : undefined,
-            primary: cal.primary ?? undefined,
-            deleted: cal.deleted ?? undefined,
-            conferenceProperties: cal.conferenceProperties ? {
-                allowedConferenceSolutionTypes: cal.conferenceProperties.allowedConferenceSolutionTypes ?? undefined
-            } : undefined
-        };
     }
 
     private async listCalendars(client: OAuth2Client): Promise<calendar_v3.Schema$CalendarListEntry[]> {

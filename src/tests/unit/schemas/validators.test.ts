@@ -717,4 +717,57 @@ describe('Array parameter JSON string preprocessing', () => {
       expect(result.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=10', 'EXDATE:20240108T100000']);
     });
   });
-}); 
+});
+
+describe('UpdateCalendarArgumentsSchema', () => {
+  const UpdateCalendarSchema = ToolSchemas['update-calendar'];
+
+  it('should validate a calendar-resource update (timeZone)', () => {
+    const result = UpdateCalendarSchema.parse({
+      calendarId: 'primary',
+      timeZone: 'America/Los_Angeles'
+    });
+    expect(result.calendarId).toBe('primary');
+    expect(result.timeZone).toBe('America/Los_Angeles');
+  });
+
+  it('should validate per-user overrides (colorId, hidden, selected)', () => {
+    const result = UpdateCalendarSchema.parse({
+      calendarId: 'cal@example.com',
+      colorId: '5',
+      hidden: false,
+      selected: true
+    });
+    expect(result.colorId).toBe('5');
+    expect(result.hidden).toBe(false);
+    expect(result.selected).toBe(true);
+  });
+
+  it('should default reminder method to popup', () => {
+    const result = UpdateCalendarSchema.parse({
+      calendarId: 'primary',
+      defaultReminders: [{ minutes: 30 }]
+    });
+    expect(result.defaultReminders?.[0]).toEqual({ method: 'popup', minutes: 30 });
+  });
+
+  it('should reject when no updatable property is provided', () => {
+    expect(() => UpdateCalendarSchema.parse({ calendarId: 'primary' })).toThrow(
+      /at least one calendar property/i
+    );
+  });
+
+  it('should reject an invalid notificationSettings type', () => {
+    expect(() => UpdateCalendarSchema.parse({
+      calendarId: 'primary',
+      notificationSettings: { notifications: [{ type: 'notARealType' }] }
+    })).toThrow();
+  });
+
+  it('should reject an invalid reminder method', () => {
+    expect(() => UpdateCalendarSchema.parse({
+      calendarId: 'primary',
+      defaultReminders: [{ method: 'sms', minutes: 10 }]
+    })).toThrow();
+  });
+});

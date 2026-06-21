@@ -360,6 +360,14 @@ export interface ListCalendarsResponse {
 }
 
 /**
+ * Response format for updating a calendar's properties
+ */
+export interface UpdateCalendarResponse {
+  calendar: CalendarInfo;
+  updated: string[]; // field names that were changed
+}
+
+/**
  * Color scheme definition with background and foreground colors
  */
 export interface ColorDefinition {
@@ -613,5 +621,46 @@ export function convertGoogleEventToStructured(
     locked: event.locked ?? undefined,
     calendarId: calendarId,
     accountId: accountId,
+  };
+}
+
+/**
+ * Converts a Google Calendar API calendar list entry to our structured format
+ * @param cal - The Google Calendar API calendar list entry
+ * @param idOverride - Optional calendar ID to use instead of cal.id (for deduplicated views)
+ * @returns Structured calendar representation
+ */
+export function convertCalendarToStructured(
+  cal: calendar_v3.Schema$CalendarListEntry,
+  idOverride?: string
+): CalendarInfo {
+  return {
+    id: idOverride || cal.id || '',
+    summary: cal.summary ?? undefined,
+    description: cal.description ?? undefined,
+    location: cal.location ?? undefined,
+    timeZone: cal.timeZone ?? undefined,
+    summaryOverride: cal.summaryOverride ?? undefined,
+    colorId: cal.colorId ?? undefined,
+    backgroundColor: cal.backgroundColor ?? undefined,
+    foregroundColor: cal.foregroundColor ?? undefined,
+    hidden: cal.hidden ?? undefined,
+    selected: cal.selected ?? undefined,
+    accessRole: cal.accessRole ?? undefined,
+    defaultReminders: cal.defaultReminders?.map(r => ({
+      method: (r.method as 'email' | 'popup') || 'popup',
+      minutes: r.minutes || 0
+    })),
+    notificationSettings: cal.notificationSettings ? {
+      notifications: cal.notificationSettings.notifications?.map(n => ({
+        type: n.type ?? undefined,
+        method: n.method ?? undefined
+      }))
+    } : undefined,
+    primary: cal.primary ?? undefined,
+    deleted: cal.deleted ?? undefined,
+    conferenceProperties: cal.conferenceProperties ? {
+      allowedConferenceSolutionTypes: cal.conferenceProperties.allowedConferenceSolutionTypes ?? undefined
+    } : undefined
   };
 }

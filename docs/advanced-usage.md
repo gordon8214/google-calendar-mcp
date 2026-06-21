@@ -19,7 +19,7 @@ All tools accept an optional `account` parameter. The behavior depends on the to
 - `account: ["work", "personal"]` → queries and merges specified accounts
 
 **Single-account tools** — accept one account only:
-- *Write:* `create-event`, `update-event`, `delete-event`
+- *Write:* `create-event`, `update-event`, `delete-event`, `update-calendar`
 - *Read:* `get-event`, `get-current-time`, `list-colors`
 - Omit `account` → auto-selects the best account (write tools pick the account with write permission to the target calendar)
 - `account: "work"` → uses that account

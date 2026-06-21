@@ -113,6 +113,66 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       }
     });
 
+    it('should update a calendar property and restore it (update-calendar)', async () => {
+      const startTime = testFactory.startTimer('update-calendar');
+
+      // Use calendarList-level (per-user) fields only so this is fully reversible
+      // and does not require owner access or mutate shared calendar metadata.
+      try {
+        // Read current state via list-calendars
+        const listResult = await client.callTool({
+          name: 'list-calendars',
+          arguments: {}
+        });
+        const list = JSON.parse((listResult.content as any)[0].text);
+        const target = list.calendars.find((c: any) => c.id === TEST_CALENDAR_ID) || list.calendars[0];
+        const originalSelected = target?.selected ?? false;
+
+        // Toggle `selected`
+        const newSelected = !originalSelected;
+        const updateResult = await client.callTool({
+          name: 'update-calendar',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            selected: newSelected
+          }
+        });
+
+        testFactory.endTimer('update-calendar', startTime, true);
+
+        expect(TestDataFactory.validateEventResponse(updateResult)).toBe(true);
+        const response = JSON.parse((updateResult.content as any)[0].text);
+        expect(response.updated).toContain('selected');
+        expect(response.calendar).toBeDefined();
+        expect(response.calendar.id).toBe(TEST_CALENDAR_ID);
+
+        // Restore original value
+        await client.callTool({
+          name: 'update-calendar',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            selected: originalSelected
+          }
+        });
+      } catch (error) {
+        testFactory.endTimer('update-calendar', startTime, false, String(error));
+        throw error;
+      }
+    });
+
+    it('should reject update-calendar with no updatable properties', async () => {
+      const result = await client.callTool({
+        name: 'update-calendar',
+        arguments: {
+          calendarId: TEST_CALENDAR_ID
+        }
+      });
+
+      // Schema validation failure surfaces as an error response
+      const text = (result.content as any)[0].text;
+      expect(text.toLowerCase()).toContain('at least one calendar property');
+    });
+
     it('should list available colors', async () => {
       const startTime = testFactory.startTimer('list-colors');
 

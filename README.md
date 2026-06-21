@@ -178,6 +178,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 | Tool | Description |
 |------|-------------|
 | `list-calendars` | List all available calendars |
+| `update-calendar` | Update a calendar's settings (time zone, name, description, location, color, visibility) |
 | `list-events` | List events with date filtering |
 | `get-event` | Get details of a specific event by ID |
 | `search-events` | Search events by text query |
@@ -242,7 +243,7 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 }
 ```
 
-**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
+**Available tool names:** `list-calendars`, `update-calendar`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 

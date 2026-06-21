@@ -7,6 +7,7 @@ import { ServerConfig } from "../config/TransportConfig.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
+import { UpdateCalendarHandler } from "../handlers/core/UpdateCalendarHandler.js";
 import { ListEventsHandler } from "../handlers/core/ListEventsHandler.js";
 import { SearchEventsHandler } from "../handlers/core/SearchEventsHandler.js";
 import { GetEventHandler } from "../handlers/core/GetEventHandler.js";
@@ -250,6 +251,75 @@ export const ToolSchemas = {
   'list-calendars': z.object({
     account: multiAccountSchema
   }),
+
+  'update-calendar': z.object({
+    account: singleAccountSchema,
+    calendarId: z.string().describe(
+      "ID or name of the calendar to update (use 'primary' for the main calendar)"
+    ),
+    // --- Shared calendar properties (calendars.patch). Require OWNER access on the calendar. ---
+    summary: z.string().optional().describe(
+      "New title for the calendar. Requires owner access. Note: the 'primary' calendar cannot be renamed."
+    ),
+    description: z.string().optional().describe(
+      "New description for the calendar. Requires owner access."
+    ),
+    location: z.string().optional().describe(
+      "New geographic location for the calendar (free-form text). Requires owner access."
+    ),
+    timeZone: z.string().optional().describe(
+      "New IANA timezone for the calendar (e.g., 'America/Los_Angeles'). Requires owner access."
+    ),
+    // --- Per-user view/overrides (calendarList.patch). Work for any access role. ---
+    summaryOverride: z.string().optional().describe(
+      "Your personal nickname for the calendar, visible only to you (useful for shared calendars)."
+    ),
+    colorId: z.string().optional().describe(
+      "Color ID for the calendar from the 'calendar' palette (use list-colors to see available IDs). " +
+      "Note: setting colorId clears any custom backgroundColor/foregroundColor, and conversely setting " +
+      "custom colors updates colorId to the closest matching palette entry."
+    ),
+    backgroundColor: z.string().optional().describe(
+      "Custom background color as a hex string (e.g., '#0088aa'). Setting this also updates colorId to " +
+      "the closest matching palette entry. Use colorId instead to pick a standard palette color."
+    ),
+    foregroundColor: z.string().optional().describe(
+      "Custom foreground (text) color as a hex string (e.g., '#ffffff'). Pair with backgroundColor."
+    ),
+    hidden: z.boolean().optional().describe(
+      "Whether the calendar is hidden from your calendar list."
+    ),
+    selected: z.boolean().optional().describe(
+      "Whether the calendar's events are shown in your calendar view."
+    ),
+    defaultReminders: z.array(z.object({
+      method: z.enum(["email", "popup"]).default("popup").describe("Reminder method"),
+      minutes: z.number().describe("Minutes before the event to trigger the reminder")
+    }).partial({ method: true })).optional().describe(
+      "Default reminders applied to events on this calendar. Replaces the existing set; pass an empty array to clear all default reminders."
+    ),
+    notificationSettings: z.object({
+      notifications: z.array(z.object({
+        type: z.enum([
+          "eventCreation",
+          "eventChange",
+          "eventCancellation",
+          "eventResponse",
+          "agenda"
+        ]).describe("Type of notification"),
+        method: z.enum(["email"]).default("email").describe("Delivery method (email only)")
+      }).partial({ method: true }))
+    }).optional().describe(
+      "Notification settings for this calendar (replaces the existing set)."
+    )
+  }).refine(
+    (data) => {
+      // Require at least one updatable property beyond account/calendarId
+      const { account, calendarId, ...updatable } = data;
+      return Object.values(updatable).some((v) => v !== undefined);
+    },
+    { message: "Provide at least one calendar property to update." }
+  ),
 
   'list-events': z.object({
     account: multiAccountSchema,
@@ -759,6 +829,7 @@ export type ToolInputs = {
 
 // Export individual types for convenience
 export type ListCalendarsInput = ToolInputs['list-calendars'];
+export type UpdateCalendarInput = ToolInputs['update-calendar'];
 export type ListEventsInput = ToolInputs['list-events'];
 export type SearchEventsInput = ToolInputs['search-events'];
 export type GetEventInput = ToolInputs['get-event'];
@@ -835,6 +906,14 @@ export class ToolRegistry {
       annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-calendars'],
       handler: ListCalendarsHandler
+    },
+    {
+      name: "update-calendar",
+      title: "Update Calendar",
+      description: "Update a calendar's settings, including its time zone, name, description, location, color, and visibility. Note: changing timeZone, summary, description, or location requires owner access to the calendar; color and visibility settings apply to your own view and work for any calendar.",
+      annotations: WRITE_NON_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS,
+      schema: ToolSchemas['update-calendar'],
+      handler: UpdateCalendarHandler
     },
     {
       name: "list-events",

@@ -68,6 +68,7 @@ describe('Tool Registration', () => {
 
     const expectedTitles: Record<string, string> = {
       'list-calendars': 'List Calendars',
+      'update-calendar': 'Update Calendar',
       'list-events': 'List Calendar Events',
       'search-events': 'Search Calendar Events',
       'get-event': 'Get Event Details',
@@ -114,6 +115,12 @@ describe('Tool Registration', () => {
         openWorldHint: false
       },
       'respond-to-event': {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      },
+      'update-calendar': {
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
