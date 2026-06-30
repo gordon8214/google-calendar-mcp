@@ -21,6 +21,10 @@ All tools accept an optional `account` parameter. The behavior depends on the to
 **Single-account tools** — accept one account only:
 - *Write:* `create-event`, `update-event`, `delete-event`, `update-calendar`
 - *Read:* `get-event`, `get-current-time`, `list-colors`
+
+**`move-event`** is the exception — it takes a source side (`account` + `calendarId`) and a
+destination side (`destinationAccount` + `destinationCalendarId`), so it can move an event
+across two different accounts. See [Moving Events Between Calendars](#moving-events-between-calendars).
 - Omit `account` → auto-selects the best account (write tools pick the account with write permission to the target calendar)
 - `account: "work"` → uses that account
 
@@ -65,6 +69,46 @@ use_tool("create-event", {
 ### Calendar Deduplication
 
 The Calendar Registry collects calendars from every account, de-duplicates shared calendars, and tracks the best account to use for read/write operations. Responses include `accountAccess` arrays so you can see every account that can reach a given calendar.
+
+## Moving Events Between Calendars
+
+The `move-event` tool moves an event from one calendar to another. It automatically picks the right strategy and reports which one it used via `method` in the response.
+
+### Same-account move (`method: "native"`)
+
+When the source and destination calendars belong to the **same** account, the tool uses Google's native move. This is lossless — the event keeps its ID, attendees, organizer, and RSVPs.
+
+```javascript
+use_tool("move-event", {
+  calendarId: "primary",                         // source
+  eventId: "abc123",
+  destinationCalendarId: "team@company.com",     // destination (same account)
+  account: "work"                                // optional; omit to auto-select
+});
+```
+
+### Cross-account move (`method: "copy-delete"`)
+
+Google's API cannot move an event between different accounts, so the tool **copies** the event into the destination account and then **deletes** the original. The copy is created first; if the delete later fails, the copy is kept and a warning is returned (`source.deleted: false`) rather than losing data.
+
+```javascript
+use_tool("move-event", {
+  calendarId: "primary",
+  eventId: "abc123",
+  account: "personal",                 // source account
+  destinationCalendarId: "primary",
+  destinationAccount: "work"           // different account => copy + delete
+});
+```
+
+Because the event is recreated in the destination account, a cross-account move has known limitations, surfaced as `warnings` in the response:
+
+- The moved event gets a **new ID** and the destination account becomes the **organizer**.
+- **Attendees are dropped by default**. Set `copyAttendees: true` to re-invite them from the destination account (this sends fresh invitations and resets RSVPs).
+- The original **Google Meet link is removed** (it's bound to the source account). Set `recreateConference: true` to mint a new Meet link in the destination (the URL will differ).
+- For a **recurring series**, the recurrence rules are copied but per-instance changes (moved/edited/deleted occurrences) and history are not. Moving a **single instance** of a series is rejected — move the whole series instead.
+
+Use `sendUpdates` (`"all"`, `"externalOnly"`, or `"none"`) to control attendee notifications; it defaults to `"none"`.
 
 ## Batch Operations
 

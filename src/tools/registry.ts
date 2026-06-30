@@ -16,6 +16,7 @@ import { CreateEventHandler } from "../handlers/core/CreateEventHandler.js";
 import { CreateEventsHandler } from "../handlers/core/CreateEventsHandler.js";
 import { UpdateEventHandler } from "../handlers/core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
+import { MoveEventHandler } from "../handlers/core/MoveEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
@@ -754,6 +755,48 @@ export const ToolSchemas = {
     )
   }),
 
+  'move-event': z.object({
+    account: singleAccountSchema.describe(
+      "Source account nickname (e.g., 'work'). Optional if only one account is connected."
+    ),
+    calendarId: z.string().describe(
+      "Source calendar ID or name containing the event (use 'primary' for the main calendar)"
+    ),
+    eventId: z.string().describe("ID of the event to move"),
+    destinationCalendarId: z.string().describe(
+      "Destination calendar ID or name to move the event to"
+    ),
+    destinationAccount: z.string()
+      .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+      .optional()
+      .describe(
+        "Destination account nickname. Omit to move within the same (source) account. " +
+        "Moving across accounts copies the event (it receives a new ID and the destination " +
+        "account becomes the organizer) and deletes the original."
+      ),
+    sendUpdates: z.enum(SEND_UPDATES_VALUES).default("none").describe(
+      "Whether to notify attendees about the move. Defaults to 'none'."
+    ),
+    copyAttendees: z.boolean().optional().default(false).describe(
+      "Cross-account moves only: re-invite the original attendees from the destination " +
+      "account (resets RSVPs). Notifications follow sendUpdates, so the default sendUpdates " +
+      "of 'none' re-invites them silently. Ignored for same-account moves."
+    ),
+    recreateConference: z.boolean().optional().default(false).describe(
+      "Cross-account moves only: create a new Google Meet link in the destination (the URL " +
+      "will differ from the original). Ignored for same-account moves."
+    )
+  }).refine(
+    (data) => !(
+      (data.destinationAccount ?? data.account) === data.account &&
+      data.destinationCalendarId === data.calendarId
+    ),
+    {
+      message: "Source and destination are the same calendar; nothing to move.",
+      path: ["destinationCalendarId"]
+    }
+  ),
+
   'get-freebusy': z.object({
     account: multiAccountSchema.describe(
       "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts."
@@ -838,6 +881,7 @@ export type CreateEventInput = ToolInputs['create-event'];
 export type CreateEventsInput = ToolInputs['create-events'];
 export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
+export type MoveEventInput = ToolInputs['move-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
 export type RespondToEventInput = ToolInputs['respond-to-event'];
@@ -1039,6 +1083,14 @@ export class ToolRegistry {
       annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['delete-event'],
       handler: DeleteEventHandler
+    },
+    {
+      name: "move-event",
+      title: "Move Calendar Event",
+      description: "Move an event from one calendar to another, including between different connected accounts. Within the same account this is a native move that preserves the event ID and attendees. Across accounts the event is copied (it receives a new ID and the destination account becomes the organizer) and the original is deleted.",
+      annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
+      schema: ToolSchemas['move-event'],
+      handler: MoveEventHandler
     },
     {
       name: "get-freebusy",

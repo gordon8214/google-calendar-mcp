@@ -371,8 +371,73 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         // 5. Verify update took effect
         await verifyEventInSearch('Integration');
-        
+
         // 6. Delete will happen in afterEach cleanup
+      });
+
+      it('should move an event to another calendar in the same account (native move)', async () => {
+        // Find a second writable calendar to move into. If the test account only has its
+        // primary calendar, there is nothing to move to, so skip gracefully.
+        const listResult = await client.callTool({
+          name: 'list-calendars',
+          arguments: {}
+        });
+        const calendars = JSON.parse((listResult.content as any)[0].text).calendars || [];
+        const destination = calendars.find((c: any) =>
+          (c.accessRole === 'owner' || c.accessRole === 'writer') &&
+          !c.primary &&
+          c.id !== TEST_CALENDAR_ID
+        );
+
+        if (!destination) {
+          console.warn('⏭️  Skipping move-event test: no second writable calendar available on the test account.');
+          return;
+        }
+
+        // Create an event in the source calendar.
+        const eventData = TestDataFactory.createSingleEvent({
+          summary: `Integration Test - Move Event ${Date.now()}`
+        });
+        const eventId = await createTestEvent(eventData);
+
+        // Move it to the destination calendar (same account => native move, ID preserved).
+        const moveResult = await client.callTool({
+          name: 'move-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId,
+            destinationCalendarId: destination.id,
+            sendUpdates: 'none'
+          }
+        });
+
+        const moveResponse = JSON.parse((moveResult.content as any)[0].text);
+        expect(moveResponse.moved).toBe(true);
+        expect(moveResponse.method).toBe('native');
+        expect(moveResponse.destination.eventId).toBe(eventId); // native move preserves the ID
+        expect(moveResponse.source.deleted).toBe(true);
+
+        // Verify the event now lives on the destination calendar.
+        const getResult = await client.callTool({
+          name: 'get-event',
+          arguments: {
+            calendarId: destination.id,
+            eventId
+          }
+        });
+        const fetched = JSON.parse((getResult.content as any)[0].text);
+        expect(fetched.event?.id).toBe(eventId);
+
+        // Clean up from the destination calendar (afterEach/afterAll only clean TEST_CALENDAR_ID,
+        // where this event no longer exists).
+        await client.callTool({
+          name: 'delete-event',
+          arguments: {
+            calendarId: destination.id,
+            eventId,
+            sendUpdates: 'none'
+          }
+        });
       });
 
       it('should handle all-day events', async () => {

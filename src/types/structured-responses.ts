@@ -306,6 +306,42 @@ export interface DeleteEventResponse {
 }
 
 /**
+ * Response format for moving an event between calendars.
+ *
+ * Two strategies are reported via `method`:
+ *  - 'native'      => same account; Google's events.move was used. The event ID is
+ *                     preserved (source.eventId === destination.eventId) and the source
+ *                     event is always removed (source.deleted === true).
+ *  - 'copy-delete' => cross-account; the event was copied into the destination (new ID)
+ *                     and then deleted from the source. If the delete failed after a
+ *                     successful copy, source.deleted is false and a warning is included.
+ */
+export interface MoveEventResponse {
+  /** The event in its new (destination) location. */
+  event: StructuredEvent;
+  /** Overall success of the move. */
+  moved: boolean;
+  /** How the move was performed; 'copy-delete' means the event ID changed. */
+  method: 'native' | 'copy-delete';
+  source: {
+    accountId: string;
+    calendarId: string;
+    /** Original event ID. Preserved for 'native'; no longer exists after 'copy-delete'. */
+    eventId: string;
+    /** Whether the source event was removed (false only in the partial-failure case). */
+    deleted: boolean;
+  };
+  destination: {
+    accountId: string;
+    calendarId: string;
+    /** Equals source.eventId for 'native'; a new ID for 'copy-delete'. */
+    eventId: string;
+  };
+  /** Notices about recurrence, attendees, conference links, or a partial delete. */
+  warnings?: string[];
+}
+
+/**
  * Response format for responding to an event invitation
  */
 export interface RespondToEventResponse {

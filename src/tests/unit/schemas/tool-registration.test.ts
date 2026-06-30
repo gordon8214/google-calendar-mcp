@@ -77,6 +77,7 @@ describe('Tool Registration', () => {
       'create-events': 'Create Calendar Events (Bulk)',
       'update-event': 'Update Calendar Event',
       'delete-event': 'Delete Calendar Event',
+      'move-event': 'Move Calendar Event',
       'get-freebusy': 'Get Free/Busy',
       'get-current-time': 'Get Current Time',
       'respond-to-event': 'Respond to Event Invitation'
@@ -109,6 +110,12 @@ describe('Tool Registration', () => {
         openWorldHint: false
       },
       'delete-event': {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false
+      },
+      'move-event': {
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,

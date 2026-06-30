@@ -771,3 +771,82 @@ describe('UpdateCalendarArgumentsSchema', () => {
     })).toThrow();
   });
 });
+
+describe('MoveEventArgumentsSchema', () => {
+  const MoveEventSchema = ToolSchemas['move-event'];
+
+  it('should validate a same-account move between two calendars', () => {
+    const result = MoveEventSchema.parse({
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'work@group.calendar.google.com'
+    });
+    expect(result.calendarId).toBe('primary');
+    expect(result.destinationCalendarId).toBe('work@group.calendar.google.com');
+    expect(result.eventId).toBe('event123');
+  });
+
+  it('should validate a cross-account move with destinationAccount', () => {
+    const result = MoveEventSchema.parse({
+      account: 'personal',
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'primary',
+      destinationAccount: 'work'
+    });
+    expect(result.account).toBe('personal');
+    expect(result.destinationAccount).toBe('work');
+  });
+
+  it('should default sendUpdates to none and flags to false', () => {
+    const result = MoveEventSchema.parse({
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'other@group.calendar.google.com'
+    });
+    expect(result.sendUpdates).toBe('none');
+    expect(result.copyAttendees).toBe(false);
+    expect(result.recreateConference).toBe(false);
+  });
+
+  it('should reject when required fields are missing', () => {
+    expect(() => MoveEventSchema.parse({ calendarId: 'primary', eventId: 'event123' })).toThrow();
+  });
+
+  it('should reject moving to the same calendar on the same account', () => {
+    expect(() => MoveEventSchema.parse({
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'primary'
+    })).toThrow(/same calendar/i);
+  });
+
+  it('should allow the same calendar id when the destination account differs', () => {
+    const result = MoveEventSchema.parse({
+      account: 'personal',
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'primary',
+      destinationAccount: 'work'
+    });
+    expect(result.destinationCalendarId).toBe('primary');
+  });
+
+  it('should reject an invalid sendUpdates value', () => {
+    expect(() => MoveEventSchema.parse({
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'other@group.calendar.google.com',
+      sendUpdates: 'everyone'
+    })).toThrow();
+  });
+
+  it('should reject an invalid destinationAccount nickname', () => {
+    expect(() => MoveEventSchema.parse({
+      calendarId: 'primary',
+      eventId: 'event123',
+      destinationCalendarId: 'primary',
+      destinationAccount: 'Work Account!'
+    })).toThrow();
+  });
+});
