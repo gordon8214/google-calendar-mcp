@@ -493,6 +493,104 @@ describe('Per-field timezone validation', () => {
     });
   });
 
+  // Regression guard: 'create-events' inlines its field schemas (to avoid $ref in the
+  // emitted JSON schema), so its start/end validation is a hand-copy of 'create-event'.
+  // That copy previously drifted — it kept a string-only ISO validator and rejected the
+  // JSON object form outright, even though CreateEventsHandler already passes both
+  // fields through createTimeObject(), which fully supports per-field timezones.
+  // These tests assert the two tools accept and reject identical time inputs.
+  describe('time-input parity between create-event and create-events', () => {
+    const CreateEventsSchema = ToolSchemas['create-events'];
+
+    // Wrap a single {start, end} pair in each tool's required envelope.
+    const asCreateEvent = (start: string, end: string) => ({
+      calendarId: 'primary',
+      summary: 'Flight OAK > SEA',
+      start,
+      end
+    });
+    const asCreateEvents = (start: string, end: string) => ({
+      calendarId: 'primary',
+      events: [{ summary: 'Flight OAK > SEA', start, end }]
+    });
+
+    const acceptedInputs: Array<[string, string, string]> = [
+      [
+        'cross-timezone flight (the case that regressed)',
+        '{"dateTime": "2026-08-04T13:43:00", "timeZone": "America/Los_Angeles"}',
+        '{"dateTime": "2026-08-04T15:17:00", "timeZone": "America/Juneau"}'
+      ],
+      [
+        'JSON object without timeZone',
+        '{"dateTime": "2024-01-15T08:00:00"}',
+        '{"dateTime": "2024-01-15T16:30:00"}'
+      ],
+      [
+        'JSON object with embedded offset',
+        '{"dateTime": "2024-01-15T08:00:00-08:00"}',
+        '{"dateTime": "2024-01-15T16:30:00-05:00"}'
+      ],
+      [
+        'JSON object all-day form',
+        '{"date": "2024-01-15"}',
+        '{"date": "2024-01-20"}'
+      ],
+      [
+        'plain ISO datetime string',
+        '2024-01-15T08:00:00',
+        '2024-01-15T16:30:00'
+      ],
+      [
+        'plain date-only string',
+        '2024-01-15',
+        '2024-01-20'
+      ]
+    ];
+
+    it.each(acceptedInputs)('accepts %s on both tools', (_label, start, end) => {
+      expect(() => CreateEventSchema.parse(asCreateEvent(start, end))).not.toThrow();
+      expect(() => CreateEventsSchema.parse(asCreateEvents(start, end))).not.toThrow();
+    });
+
+    const rejectedInputs: Array<[string, string, RegExp]> = [
+      ['both date and dateTime', '{"date": "2024-01-01", "dateTime": "2024-01-01T10:00:00"}', /Cannot specify both/],
+      ['empty timeZone', '{"dateTime": "2024-01-01T10:00:00", "timeZone": ""}', /timeZone cannot be empty/],
+      ['non-string timeZone', '{"dateTime": "2024-01-01T10:00:00", "timeZone": 123}', /timeZone must be a string/],
+      ['malformed JSON', '{not valid json}', /Invalid JSON/],
+      ['neither date nor dateTime', '{"timeZone": "America/New_York"}', /must have either/],
+      ['non-ISO string', 'next Tuesday at noon', /Must be ISO 8601 format/]
+    ];
+
+    it.each(rejectedInputs)('rejects %s on both tools with the same message', (_label, start, pattern) => {
+      const end = '2024-01-01T11:00:00';
+      expect(() => CreateEventSchema.parse(asCreateEvent(start, end))).toThrow(pattern);
+      expect(() => CreateEventsSchema.parse(asCreateEvents(start, end))).toThrow(pattern);
+    });
+
+    it('validates the end field too, not just start', () => {
+      const start = '2024-01-01T10:00:00';
+      const badEnd = '{"dateTime": "2024-01-01T11:00:00", "timeZone": ""}';
+      expect(() => CreateEventSchema.parse(asCreateEvent(start, badEnd))).toThrow(/timeZone cannot be empty/);
+      expect(() => CreateEventsSchema.parse(asCreateEvents(start, badEnd))).toThrow(/timeZone cannot be empty/);
+    });
+
+    it('surfaces the JSON object form in both tools\' start/end descriptions', () => {
+      // The description is the contract an LLM client reads; if it only documents the
+      // string form, callers never emit the object form even when validation allows it.
+      const descriptions = [
+        (CreateEventSchema.shape.start as any).description,
+        (CreateEventSchema.shape.end as any).description,
+        ((CreateEventsSchema.shape.events as any).element.shape.start as any).description,
+        ((CreateEventsSchema.shape.events as any).element.shape.end as any).description
+      ];
+
+      for (const description of descriptions) {
+        expect(description).toMatch(/timeZone/);
+        expect(description).toMatch(/multiple timezones/);
+      }
+    });
+  });
+
   describe('focusTime and outOfOffice events with JSON format', () => {
     it('should accept focusTime event with JSON dateTime format', () => {
       const input = {

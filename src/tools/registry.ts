@@ -72,10 +72,11 @@ const validateTimeInput = (val: string): string | true => {
     }
     return "JSON time object must have either 'dateTime' or 'date' field";
   }
-  return isValidIsoDateOrDateTime(trimmed) ? true : "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events";
+  return isValidIsoDateOrDateTime(trimmed)
+    ? true
+    : "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events, " +
+      "or a JSON object for per-field timezone: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'";
 };
-
-const isValidTimeInput = (val: string): boolean => validateTimeInput(val) === true;
 
 // superRefine handler for time input validation with dynamic error messages
 // Zod 4's .refine() doesn't support function-based error messages, so we use .superRefine()
@@ -576,12 +577,27 @@ export const ToolSchemas = {
     ),
     events: z.array(z.object({
       summary: z.string().describe("Title of the event"),
+      // NOTE: keep the time-input validation and descriptions here in sync with the
+      // 'create-event' / 'update-event' schemas above. These fields are inlined (see the
+      // comment at the top of 'create-events'), so they share the validator *function*
+      // rather than the schema object — sharing the schema object would reintroduce $ref.
+      // src/tests/unit/schemas/validators.test.ts asserts parity between the two tools.
       start: z.string()
-        .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-        .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events"),
+        .superRefine(superRefineTimeInput)
+        .describe(
+          "Event start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+          "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'. " +
+          "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
+          "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
+        ),
       end: z.string()
-        .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-        .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive)"),
+        .superRefine(superRefineTimeInput)
+        .describe(
+          "Event end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+          "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'. " +
+          "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
+          "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
+        ),
       calendarId: z.string().optional().describe("Override calendar ID for this event"),
       account: z.string()
         .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
